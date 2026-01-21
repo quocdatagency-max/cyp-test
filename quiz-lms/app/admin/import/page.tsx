@@ -18,7 +18,7 @@ function parseCSV(text: string): Promise<CSVRow[]> {
       dynamicTyping: false,
       // Tự đoán delimiter ("," hoặc ";" tùy Excel/Windows)
       delimiter: "",
-      transformHeader: (h: string) => (typeof h === "string" ? h.trim() : h),
+      transformHeader: (h: string) => h.trim(),
       transform: (v: unknown) => (typeof v === "string" ? v.trim() : v),
       complete: (results) => {
         const r = results as Papa.ParseResult<CSVRow>;
@@ -34,8 +34,7 @@ function parseCSV(text: string): Promise<CSVRow[]> {
   });
 }
 
-
-function normalizeCorrectAnswer(input: any): string {
+function normalizeCorrectAnswer(input: unknown): string {
   // Cho phép: "c" -> "C", "A; C" -> "A,C"
   // Loại bỏ khoảng trắng
   const s = String(input ?? "")
@@ -47,7 +46,7 @@ function normalizeCorrectAnswer(input: any): string {
   return s;
 }
 
-function normalizeDifficulty(input: any): string {
+function normalizeDifficulty(input: unknown): string {
   const s = String(input ?? "").toLowerCase().trim();
   if (["easy", "medium", "hard"].includes(s)) return s;
   // chấp nhận tiếng Việt nếu bạn nhập
@@ -57,13 +56,25 @@ function normalizeDifficulty(input: any): string {
   return "medium";
 }
 
-function normalizeQType(input: any): string {
+function normalizeQType(input: unknown): string {
   const s = String(input ?? "").toLowerCase().trim();
   if (["single", "multi", "truefalse"].includes(s)) return s;
   // cho phép nhập "one"/"multiple"
   if (["one", "singlechoice", "single_choice"].includes(s)) return "single";
   if (["multiple", "multichoice", "multi_choice"].includes(s)) return "multi";
   return "single";
+}
+
+function getStr(r: CSVRow, key: string): string {
+  const v = r[key];
+  return String(v ?? "").trim();
+}
+
+function getOptStrOrNull(r: CSVRow, key: string): string | null {
+  const v = r[key];
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  return s ? s : null;
 }
 
 export default function ImportPage() {
@@ -110,7 +121,7 @@ export default function ImportPage() {
           "Không đọc được role từ bảng profiles. Hãy đảm bảo bạn đã tạo bảng profiles + trigger, hoặc set role=teacher cho tài khoản."
         );
       } else {
-        setRole(prof?.role ?? "student");
+        setRole((prof as any)?.role ?? "student");
       }
     })();
 
@@ -164,29 +175,31 @@ export default function ImportPage() {
     const required = ["question_text", "correct_answer"];
     const missing = required.filter((k) => !(k in rows[0]));
     if (missing.length) {
-      setStatus(
-        `CSV thiếu cột bắt buộc: ${missing.join(", ")}. Hãy kiểm tra header (dòng 1).`
-      );
+      setStatus(`CSV thiếu cột bắt buộc: ${missing.join(", ")}. Hãy kiểm tra header (dòng 1).`);
       return;
     }
 
     // Build payload
     const payload = rows.map((r) => {
-      const correct = normalizeCorrectAnswer(r.correct_answer);
+      const correct = normalizeCorrectAnswer(r["correct_answer"]);
       return {
         subject_id: subjectId,
         topic_id: topicId || null,
-        question_text: String(r.question_text ?? "").trim(),
-        option_a: r.option_a ? String(r.option_a).trim() : null,
-        option_b: r.option_b ? String(r.option_b).trim() : null,
-        option_c: r.option_c ? String(r.option_c).trim() : null,
-        option_d: r.option_d ? String(r.option_d).trim() : null,
-        option_e: r.option_e ? String(r.option_e).trim() : null,
+
+        question_text: getStr(r, "question_text"),
+
+        option_a: getOptStrOrNull(r, "option_a"),
+        option_b: getOptStrOrNull(r, "option_b"),
+        option_c: getOptStrOrNull(r, "option_c"),
+        option_d: getOptStrOrNull(r, "option_d"),
+        option_e: getOptStrOrNull(r, "option_e"),
+
         correct_answer: correct,
-        explanation: r.explanation ? String(r.explanation).trim() : null,
-        difficulty: normalizeDifficulty(r.difficulty),
-        qtype: normalizeQType(r.qtype),
-        image_url: r.image_url ? String(r.image_url).trim() : null,
+
+        explanation: getOptStrOrNull(r, "explanation"),
+        difficulty: normalizeDifficulty(r["difficulty"]),
+        qtype: normalizeQType(r["qtype"]),
+        image_url: getOptStrOrNull(r, "image_url"),
       };
     });
 
@@ -274,7 +287,7 @@ export default function ImportPage() {
             disabled={role !== "teacher" && role !== "admin"}
           />
           {fileName && <div className="text-sm">File: {fileName}</div>}
-          {(role !== "teacher" && role !== "admin") && (
+          {role !== "teacher" && role !== "admin" && (
             <div className="text-sm text-red-600">
               Bạn cần role teacher/admin để import. Hãy set role trong bảng profiles.
             </div>
@@ -307,4 +320,3 @@ question_text,option_a,option_b,option_c,option_d,option_e,correct_answer,explan
     </div>
   );
 }
-
