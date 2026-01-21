@@ -20,7 +20,8 @@ function parseCSV(text: string): Promise<CSVRow[]> {
       delimiter: "",
       transformHeader: (h: string) => h.trim(),
       transform: (v: unknown) => (typeof v === "string" ? v.trim() : v),
-      complete: (results) => {
+      complete: (results: unknown) => {
+
         const r = results as Papa.ParseResult<CSVRow>;
         if (r.errors?.length) {
           const first = r.errors[0];
@@ -320,3 +321,4 @@ question_text,option_a,option_b,option_c,option_d,option_e,correct_answer,explan
     </div>
   );
 }
+
