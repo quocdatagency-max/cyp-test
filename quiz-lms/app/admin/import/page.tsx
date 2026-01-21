@@ -8,30 +8,32 @@ import { useRouter } from "next/navigation";
 type Subject = { id: string; name: string };
 type Topic = { id: string; name: string; subject_id: string };
 
-type CSVRow = Record<string, any>;
+type CSVRow = Record<string, unknown>;
 
 function parseCSV(text: string): Promise<CSVRow[]> {
   return new Promise((resolve, reject) => {
-    Papa.parse<CSVRow>(text, {
+    Papa.parse(text, {
       header: true,
       skipEmptyLines: true,
       dynamicTyping: false,
       // Tự đoán delimiter ("," hoặc ";" tùy Excel/Windows)
       delimiter: "",
-      transformHeader: (h) => (typeof h === "string" ? h.trim() : h),
-      transform: (v) => (typeof v === "string" ? v.trim() : v),
+      transformHeader: (h: string) => (typeof h === "string" ? h.trim() : h),
+      transform: (v: unknown) => (typeof v === "string" ? v.trim() : v),
       complete: (results) => {
-        if (results.errors?.length) {
-          const first = results.errors[0];
+        const r = results as Papa.ParseResult<CSVRow>;
+        if (r.errors?.length) {
+          const first = r.errors[0];
           reject(new Error(`CSV parse error (row ${first.row}): ${first.message}`));
           return;
         }
-        resolve(results.data ?? []);
+        resolve((r.data ?? []) as CSVRow[]);
       },
       error: (err) => reject(err),
     });
   });
 }
+
 
 function normalizeCorrectAnswer(input: any): string {
   // Cho phép: "c" -> "C", "A; C" -> "A,C"
@@ -305,3 +307,4 @@ question_text,option_a,option_b,option_c,option_d,option_e,correct_answer,explan
     </div>
   );
 }
+
