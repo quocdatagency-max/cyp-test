@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
+import type { ParseError, ParseResult } from "papaparse";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 
@@ -12,25 +13,29 @@ type CSVRow = Record<string, unknown>;
 
 function parseCSV(text: string): Promise<CSVRow[]> {
   return new Promise((resolve, reject) => {
-    Papa.parse(text, {
+    Papa.parse<CSVRow>(text, {
       header: true,
       skipEmptyLines: true,
       dynamicTyping: false,
-      // Tự đoán delimiter ("," hoặc ";" tùy Excel/Windows)
-      delimiter: "",
-      transformHeader: (h: string) => h.trim(),
-      transform: (v: unknown) => (typeof v === "string" ? v.trim() : v),
-      complete: (results: unknown) => {
 
-        const r = results as Papa.ParseResult<CSVRow>;
-        if (r.errors?.length) {
-          const first = r.errors[0];
+      // Không set delimiter để PapaParse tự đoán ("," hoặc ";" thường gặp)
+      // delimiter: "",
+
+      // Xử lý BOM (\uFEFF) khi CSV xuất từ Excel/Windows
+      transformHeader: (h: string) => h.replace(/^\uFEFF/, "").trim(),
+
+      transform: (v: unknown) => (typeof v === "string" ? v.trim() : v),
+
+      complete: (results: ParseResult<CSVRow>) => {
+        if (results.errors?.length) {
+          const first = results.errors[0];
           reject(new Error(`CSV parse error (row ${first.row}): ${first.message}`));
           return;
         }
-        resolve((r.data ?? []) as CSVRow[]);
+        resolve(results.data ?? []);
       },
-      error: (err) => reject(err),
+
+      error: (err: ParseError) => reject(err),
     });
   });
 }
@@ -50,19 +55,23 @@ function normalizeCorrectAnswer(input: unknown): string {
 function normalizeDifficulty(input: unknown): string {
   const s = String(input ?? "").toLowerCase().trim();
   if (["easy", "medium", "hard"].includes(s)) return s;
+
   // chấp nhận tiếng Việt nếu bạn nhập
   if (["dễ", "de"].includes(s)) return "easy";
   if (["vừa", "vua", "trungbinh", "trung_binh", "tb"].includes(s)) return "medium";
   if (["khó", "kho"].includes(s)) return "hard";
+
   return "medium";
 }
 
 function normalizeQType(input: unknown): string {
   const s = String(input ?? "").toLowerCase().trim();
   if (["single", "multi", "truefalse"].includes(s)) return s;
+
   // cho phép nhập "one"/"multiple"
   if (["one", "singlechoice", "single_choice"].includes(s)) return "single";
   if (["multiple", "multichoice", "multi_choice"].includes(s)) return "multi";
+
   return "single";
 }
 
@@ -321,4 +330,3 @@ question_text,option_a,option_b,option_c,option_d,option_e,correct_answer,explan
     </div>
   );
 }
-
